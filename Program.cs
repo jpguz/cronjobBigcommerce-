@@ -1,4 +1,3 @@
-using FluentFTP;
 using System;
 using System.IO;
 using System.Net.Http;
@@ -12,14 +11,11 @@ using System.Linq;
 
 public class Program
 {
-    private static readonly string FtpHost = Environment.GetEnvironmentVariable("FTP_HOST")!;
-    private static readonly string FtpUser = Environment.GetEnvironmentVariable("FTP_USER")!;
-    private static readonly string FtpPass = Environment.GetEnvironmentVariable("FTP_PASS")!;
     private static readonly string BigCommerceApiUrl = Environment.GetEnvironmentVariable("BIGCOMMERCE_API_URL")!;
     private static readonly string BigCommerceToken = Environment.GetEnvironmentVariable("BIGCOMMERCE_TOKEN")!;
     // Batch variant endpoint: same base but /variants instead of /products
     private static readonly string BigCommerceVariantsUrl = Environment.GetEnvironmentVariable("BIGCOMMERCE_API_URL")!.Replace("/products", "/variants");
-    private const string FtpFilePath = "/Stock.txt";
+    private const string StockFilePath = "/home/adan/ftp/Stock.txt";
 
     // Shared client — avoids socket exhaustion and lets us set auth once
     private static readonly HttpClient _http = new HttpClient();
@@ -126,7 +122,7 @@ public class Program
     {
         try
         {
-            string filePath = DownloadFileFromFTP();
+            string filePath = ReadStockFilePath();
             var productGroups = ReadProductsFromTxt(filePath);
             var mapping = LoadMapping();
             int newMappings = 0;
@@ -236,49 +232,13 @@ public class Program
         }
     }
 
-    public string DownloadFileFromFTP(int maxRetries = 3)
+    public string ReadStockFilePath()
     {
-        string localPath = Path.Combine(Path.GetTempPath(), "stock.txt");
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++)
-        {
-            try
-            {
-                using var ftpClient = new FtpClient(FtpHost, new NetworkCredential(FtpUser, FtpPass));
-                ftpClient.Config.EncryptionMode = FtpEncryptionMode.None;
-                ftpClient.Config.ValidateAnyCertificate = true;
-                ftpClient.Config.ConnectTimeout = 30000;
-                ftpClient.Config.DataConnectionConnectTimeout = 30000;
-
-                ftpClient.Connect();
-                Console.WriteLine("FTP connection established");
-
-                if (ftpClient.FileExists(FtpFilePath))
-                {
-                    ftpClient.DownloadFile(localPath, FtpFilePath);
-                    Console.WriteLine("TXT file downloaded successfully.");
-                }
-                else
-                {
-                    Console.WriteLine("The file does not exist on the server.");
-                }
-
-                ftpClient.Disconnect();
-                return localPath;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"FTP attempt {attempt}/{maxRetries} failed: {ex.Message}");
-                if (attempt < maxRetries)
-                {
-                    Console.WriteLine("Retrying in 15s...");
-                    System.Threading.Thread.Sleep(15000);
-                }
-            }
-        }
-
-        Console.WriteLine("ERROR: Could not download Stock.txt after all retries.");
-        return localPath;
+        if (!File.Exists(StockFilePath))
+            Console.WriteLine($"WARNING: Stock file not found at {StockFilePath}");
+        else
+            Console.WriteLine($"Stock file found at {StockFilePath}");
+        return StockFilePath;
     }
 
     public List<ProductGroup> ReadProductsFromTxt(string filePath)
